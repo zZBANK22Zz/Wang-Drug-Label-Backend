@@ -1,13 +1,14 @@
 const MemberModel = require("../model/memberModel");
+const jwt = require('jsonwebtoken');
 
 class MemberController {
-  // เพิ่ม member ใหม่
+  // เพิ่ม member ใหม่ (Register)
   static async addMember(req, res) {
     try {
       const memberData = req.body;
 
-      // Validation
-      const requiredFields = ["mem_code", "mem_name", "province", "emp_code"];
+      // Validation - เพิ่ม password
+      const requiredFields = ["mem_code", "mem_name", "province", "password"];
       const missingFields = requiredFields.filter(
         (field) => !memberData[field]
       );
@@ -16,6 +17,15 @@ class MemberController {
         return res.status(400).json({
           success: false,
           message: `Missing required fields: ${missingFields.join(", ")}`,
+          data: null,
+        });
+      }
+
+      // Password validation
+      if (memberData.password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password must be at least 6 characters long',
           data: null,
         });
       }
@@ -35,10 +45,13 @@ class MemberController {
       // สร้าง member ใหม่
       const newMember = await MemberModel.createMember(memberData);
 
+      // ลบ password ก่อน return
+      const { password, ...memberWithoutPassword } = newMember;
+
       return res.status(201).json({
         success: true,
-        message: "Member created successfully",
-        data: newMember,
+        message: "Member registered successfully",
+        data: memberWithoutPassword,
       });
     } catch (error) {
       console.error("Error in addMember:", error);
@@ -94,10 +107,13 @@ class MemberController {
         });
       }
 
+      // ลบ password ก่อน return
+      const { password, ...memberWithoutPassword } = member;
+
       return res.status(200).json({
         success: true,
         message: "Member retrieved successfully",
-        data: member,
+        data: memberWithoutPassword,
       });
     } catch (error) {
       console.error("Error in getMemberById:", error);
@@ -158,10 +174,13 @@ class MemberController {
         });
       }
 
+      // ลบ password ก่อน return
+      const { password, ...memberWithoutPassword } = updatedMember;
+
       return res.status(200).json({
         success: true,
         message: "Picking status updated successfully",
-        data: updatedMember,
+        data: memberWithoutPassword,
       });
     } catch (error) {
       console.error("Error in updatePickingStatus:", error);
@@ -186,9 +205,10 @@ class MemberController {
           data: null,
         });
       }
-      // ตรวจสอบว่า member ที่จะอัพเดทมีอยู่จริงหรือไม่
-      const exitingMember = await MemberModel.getAllMembers(id);
-      if (!exitingMember) {
+
+      // แก้ไข: ใช้ getMemberById แทน getAllMembers
+      const existingMember = await MemberModel.getMemberById(id);
+      if (!existingMember) {
         return res.status(404).json({
           success: false,
           message: "Member not found",
@@ -203,6 +223,7 @@ class MemberController {
         "province",
         "emp_code",
         "mem_note",
+        "password"
       ];
       const hasValidFields = Object.keys(updateData).some((field) =>
         allowedFields.includes(field)
@@ -263,25 +284,38 @@ class MemberController {
         });
       }
 
-      const updatedMember = await MemberModel.updateMemberById(id, updateData);
+      // Password validation
+      if (updateData.password !== undefined && updateData.password.length < 6) {
+        return res.status(400).json({
+          success: false,
+          message: 'Password must be at least 6 characters long',
+          data: null,
+        });
+      }
+
+      // แก้ไข: ใช้ updateMember แทน updateMemberById
+      const updatedMember = await MemberModel.updateMember(id, updateData);
+
+      // ลบ password ก่อน return
+      const { password, ...memberWithoutPassword } = updatedMember;
 
       return res.status(200).json({
-        sucess: true,
+        success: true, // แก้ไข typo
         message: "Member updated successfully",
-        data: updatedMember,
+        data: memberWithoutPassword,
       });
 
-    } catch (e) {
-      console.error("Error in updateMember:", e);
+    } catch (error) {
+      console.error("Error in updateMember:", error);
       return res.status(500).json({
         success: false,
         message: "Internal server error",
-        error: e.message,
+        error: error.message,
       });
     }
   }
 
-  // deletemember
+  // Delete member
   static async deleteMember(req, res) {
     try {
       const { id } = req.params;
@@ -294,9 +328,9 @@ class MemberController {
         });
       }
 
-      const deletedMember = await MemberModel.deleteMemberById(id);
-
-      if (!deletedMember) {
+      // ตรวจสอบว่า member มีอยู่จริง
+      const existingMember = await MemberModel.getMemberById(id);
+      if (!existingMember) {
         return res.status(404).json({
           success: false,
           message: "Member not found",
@@ -304,13 +338,77 @@ class MemberController {
         });
       }
 
+      // แก้ไข: ใช้ deleteMember แทน deleteMemberById
+      const deletedMember = await MemberModel.deleteMember(id);
+
+      // ลบ password ก่อน return
+      const { password, ...memberWithoutPassword } = deletedMember;
+
       return res.status(200).json({
         success: true,
         message: "Member deleted successfully",
-        data: deletedMember,
+        data: memberWithoutPassword,
       });
     } catch (error) {
       console.error("Error in deleteMember:", error);
+      return res.status(500).json({
+        success: false,
+        message: "Internal server error",
+        error: error.message,
+      });
+    }
+  }
+
+  /*=============================================
+                      Login member
+  =============================================*/
+  static async loginMember(req, res) {
+    try {
+      const { mem_code, password } = req.body;
+
+      if (!mem_code || !password) {
+        return res.status(400).json({
+          success: false,
+          message: "Member code and password are required",
+          data: null,
+        });
+      }
+
+      // ตรวจสอบ login
+      const member = await MemberModel.loginMember(mem_code, password);
+
+      // สร้าง JWT token
+      const token = jwt.sign(
+        { 
+          mem_id: member.mem_id, 
+          mem_code: member.mem_code,
+          mem_name: member.mem_name 
+        },
+        process.env.JWT_SECRET,
+        { expiresIn: process.env.JWT_EXPIRES_IN || '24h' }
+      );
+
+      return res.status(200).json({
+        success: true,
+        message: "Login successful",
+        data: {
+          member: member,
+          token: token
+        }
+      });
+
+    } catch (error) {
+      console.error("Error in loginMember:", error);
+      
+      // Handle specific login errors
+      if (error.message === "Member not found" || error.message === "Invalid password") {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid member code or password",
+          data: null,
+        });
+      }
+
       return res.status(500).json({
         success: false,
         message: "Internal server error",
