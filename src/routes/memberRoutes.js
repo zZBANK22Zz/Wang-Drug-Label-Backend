@@ -4,27 +4,41 @@ const { authenticateToken } = require('../middleware'); // เพิ่ม middl
 
 const router = express.Router();
 
+// ==================================================
 // Public routes (ไม่ต้อง login)
+// ==================================================
+
 // POST /api/members - เพิ่ม member ใหม่ (Register)
 router.post('/', MemberController.addMember);
 
-// POST /api/members/login - Login member (ต้องอยู่ก่อน dynamic routes)
+// POST /api/members/login - Login member (รองรับทั้ง username และ memberCode)
 router.post('/login', MemberController.loginMember);
+
+// GET /api/members/test-db - ทดสอบการเชื่อมต่อ database
+router.get('/test-db', MemberController.testDatabase);
 
 // GET /api/members - ดึงข้อมูล member ทั้งหมด
 router.get('/', MemberController.getAllMembers);
 
+// ==================================================
 // Protected routes (ต้อง login)
+// ==================================================
+
 // GET /api/members/:id - ดึงข้อมูล member ตาม ID
 router.get('/:id', authenticateToken, MemberController.getMemberById);
 
 // PUT /api/members/:id - อัพเดทข้อมูล member
 router.put('/:id', authenticateToken, MemberController.updateMember);
 
-// PUT /api/members/:id/picking-status - อัพเดท picking status
-router.put('/:id/picking-status', authenticateToken, MemberController.updatePickingStatus);
+// PUT /api/members/:id/address - อัพเดทที่อยู่ member (Updated fields)
+router.put('/:id/address', authenticateToken, MemberController.updateAddress);
 
 // DELETE /api/members/:id - ลบ member ตาม ID
 router.delete('/:id', authenticateToken, MemberController.deleteMember);
+
+// ==================================================
+// Routes ที่ถูกลบออก (เพราะไม่มี columns เหล่านี้แล้ว)
+// ==================================================
+// PUT /api/members/:id/picking-status - ลบออกแล้ว (ไม่มี picking_status ใน table ใหม่)
 
 module.exports = router;
