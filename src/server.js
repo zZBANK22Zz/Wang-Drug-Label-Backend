@@ -6,7 +6,10 @@ require('dotenv').config();
 const memberRoutes = require('../src/routes/memberRoutes');
 const productRoutes = require('../src/routes/productRoutes');
 const prescriptionLogsRoute = require('../src/routes/prescription-logsRoute');
+const productPharmaRoutes = require('../src/routes/productPharmaRoutes')
 const { requestLogger, errorHandler, notFound, validateJSON } = require('../src/middleware');
+const pharmaVerify = require('./routes/pharma-verify')
+const pharmaPersonalRoutes = require('../src/routes/pharmaPersonalRoutes')
 
 const app = express();
 const PORT = process.env.PORT;
@@ -39,6 +42,9 @@ app.get('/health', (req, res) => {
 app.use('/api/members', memberRoutes);
 app.use('/api/products', productRoutes); // เพิ่ม product routes
 app.use('/api', prescriptionLogsRoute);
+app.use('/api',productPharmaRoutes)
+app.use('/api', pharmaVerify)
+app.use('/api/pharma-personal', pharmaPersonalRoutes)
 
 // API Documentation endpoint
 app.get('/api', (req, res) => {

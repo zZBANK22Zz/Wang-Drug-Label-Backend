@@ -16,14 +16,16 @@ class ProductModel {
     }
   }
 
-  // สร้าง product ใหม่ (แก้ไขแล้ว)
-  static async createProduct(productData) {
+  // สร้าง product ใหม่ (แก้ไขแล้ว) - รองรับ transaction
+  static async createProduct(productData, client = null) {
+    const dbClient = client || pool; // ใช้ client ที่ส่งมา หรือ pool ปกติ
+    
     const {
       pro_code,
       pro_name,
       pro_proname,
-      pro_nameEng,
-      pro_nameMan,
+      pro_nameeng,
+      pro_nameth,
       pro_genericname,
       pro_drugmain,
       pro_keysearch,
@@ -41,13 +43,13 @@ class ProductModel {
       pro_price2,
       pro_price3,
       pro_limitcontrol,
-      pro_priceThai,
+      pro_pricethai,
       pro_instock = 0.00,
       pro_imgmain,
       pro_img,
-      pro_imgU1,
-      pro_imgU2,
-      pro_imgU3,
+      pro_imgu1,
+      pro_imgu2,
+      pro_imgu3,
       pro_glwa1 = '0',
       pro_glwa2 = '0',
       pro_glwa3 = '0',
@@ -75,11 +77,11 @@ class ProductModel {
     // แก้ไข: ใช้ VALUES เท่ากับ columns (51 ตัว)
     const query = `
       INSERT INTO product (
-        pro_code, pro_name, pro_proname, pro_nameEng, pro_nameMan, pro_genericname,
+        pro_code, pro_name, pro_proname, pro_nameeng, pro_nameth, pro_genericname,
         pro_drugmain, pro_keysearch, pro_unit1, pro_ratio1, pro_unit2, pro_ratio2,
         pro_unit3, pro_ratio3, pro_supplies, pro_barcode1, pro_barcode2, pro_barcode3,
-        pro_price1, pro_price2, pro_price3, pro_limitcontrol, pro_priceThai, pro_instock,
-        pro_imgmain, pro_img, pro_imgU1, pro_imgU2, pro_imgU3, pro_glwa1, pro_glwa2,
+        pro_price1, pro_price2, pro_price3, pro_limitcontrol, pro_pricethai, pro_instock,
+        pro_imgmain, pro_img, pro_imgu1, pro_imgu2, pro_imgu3, pro_glwa1, pro_glwa2,
         pro_glwa3, pro_glwa4, pro_glwa5, pro_glwa6, pro_glwa7, pro_glwa8, pro_glwa9,
         pro_glwa10, pro_drugregister, pro_ps1, pro_ps2, pro_ps3, pro_ps4, pro_ps5,
         pro_ps6, pro_ps7, pro_ps8, pro_point, pro_view, pro_rating
@@ -93,13 +95,13 @@ class ProductModel {
     `;
 
     const values = [
-      pro_code, pro_name, pro_proname || null, pro_nameEng || null, pro_nameMan || null,
+      pro_code, pro_name, pro_proname || null, pro_nameeng || null, pro_nameth || null,
       pro_genericname || null, pro_drugmain || null, pro_keysearch || null, pro_unit1 || null,
       pro_ratio1 || null, pro_unit2 || null, pro_ratio2 || null, pro_unit3 || null,
       pro_ratio3 || null, pro_supplies || null, pro_barcode1 || null, pro_barcode2 || null,
       pro_barcode3 || null, pro_price1 || null, pro_price2 || null, pro_price3 || null,
-      pro_limitcontrol || null, pro_priceThai || null, pro_instock, pro_imgmain || null,
-      pro_img || null, pro_imgU1 || null, pro_imgU2 || null, pro_imgU3 || null,
+      pro_limitcontrol || null, pro_pricethai || null, pro_instock, pro_imgmain || null,
+      pro_img || null, pro_imgu1 || null, pro_imgu2 || null, pro_imgu3 || null,
       pro_glwa1, pro_glwa2, pro_glwa3, pro_glwa4, pro_glwa5, pro_glwa6, pro_glwa7,
       pro_glwa8, pro_glwa9, pro_glwa10, pro_drugregister || null, pro_ps1, pro_ps2,
       pro_ps3, pro_ps4, pro_ps5, pro_ps6, pro_ps7, pro_ps8, pro_point, pro_view, pro_rating
@@ -112,7 +114,7 @@ class ProductModel {
         productData: { pro_code, pro_name, pro_instock }
       });
       
-      const result = await pool.query(query, values);
+      const result = await dbClient.query(query, values);
       return result.rows[0];
     } catch (error) {
       console.error('❌ Create product error:', error.message);
@@ -293,11 +295,11 @@ class ProductModel {
 
       // Define allowed fields for update
       const allowedFields = [
-        'pro_code', 'pro_name', 'pro_proname', 'pro_nameEng', 'pro_nameMan', 'pro_genericname',
+        'pro_code', 'pro_name', 'pro_proname', 'pro_nameeng', 'pro_nameth', 'pro_genericname',
         'pro_drugmain', 'pro_keysearch', 'pro_unit1', 'pro_ratio1', 'pro_unit2', 'pro_ratio2',
         'pro_unit3', 'pro_ratio3', 'pro_supplies', 'pro_barcode1', 'pro_barcode2', 'pro_barcode3',
-        'pro_price1', 'pro_price2', 'pro_price3', 'pro_limitcontrol', 'pro_priceThai', 'pro_instock',
-        'pro_imgmain', 'pro_img', 'pro_imgU1', 'pro_imgU2', 'pro_imgU3', 'pro_glwa1', 'pro_glwa2',
+        'pro_price1', 'pro_price2', 'pro_price3', 'pro_limitcontrol', 'pro_pricethai', 'pro_instock',
+        'pro_imgmain', 'pro_img', 'pro_imgu1', 'pro_imgu2', 'pro_imgu3', 'pro_glwa1', 'pro_glwa2',
         'pro_glwa3', 'pro_glwa4', 'pro_glwa5', 'pro_glwa6', 'pro_glwa7', 'pro_glwa8', 'pro_glwa9',
         'pro_glwa10', 'pro_drugregister', 'pro_ps1', 'pro_ps2', 'pro_ps3', 'pro_ps4', 'pro_ps5',
         'pro_ps6', 'pro_ps7', 'pro_ps8', 'pro_point', 'pro_view', 'pro_rating'

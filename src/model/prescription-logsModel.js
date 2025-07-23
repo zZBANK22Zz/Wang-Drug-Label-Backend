@@ -97,13 +97,13 @@ class PrescriptionLogsModel {
       const query = `
         SELECT 
           pl.*,
-          m.mem_name,
+          m.mem_namesite,
           m.mem_code,
-          p.product_name as current_product_name,
-          p.product_code as current_product_code
+          p.pro_name as current_product_name,
+          p.pro_code as current_product_code
         FROM prescription_logs pl
-        JOIN members m ON pl.mem_id = m.mem_id
-        LEFT JOIN products p ON pl.product_id = p.product_id
+        JOIN member m ON pl.mem_id = m.mem_id
+        LEFT JOIN product p ON pl.product_id = p.pro_id
         WHERE pl.id = $1
       `;
 
@@ -124,13 +124,13 @@ class PrescriptionLogsModel {
       const query = `
         SELECT 
           pl.*,
-          m.mem_name,
+          m.mem_namesite,
           m.mem_code,
-          p.product_name as current_product_name,
-          p.product_code as current_product_code
+          p.pro_name as current_product_name,
+          p.pro_code as current_product_code
         FROM prescription_logs pl
-        JOIN members m ON pl.mem_id = m.mem_id
-        LEFT JOIN products p ON pl.product_id = p.product_id
+        JOIN member m ON pl.mem_id = m.mem_id
+        LEFT JOIN product p ON pl.product_id = p.pro_id
         WHERE pl.mem_id = $1
         ORDER BY pl.created_at DESC
         LIMIT $2 OFFSET $3
@@ -170,7 +170,7 @@ class PrescriptionLogsModel {
     
     try {
       const result = await client.query(
-        'SELECT mem_id FROM members WHERE mem_id = $1',
+        'SELECT mem_id FROM member WHERE mem_id = $1',
         [memId]
       );
       return result.rows.length > 0;
@@ -185,7 +185,7 @@ class PrescriptionLogsModel {
     
     try {
       const result = await client.query(
-        'SELECT product_id FROM products WHERE product_id = $1',
+        'SELECT pro_id FROM product WHERE pro_id = $1',
         [productId]
       );
       return result.rows.length > 0;
@@ -200,7 +200,7 @@ class PrescriptionLogsModel {
     
     try {
       const result = await client.query(
-        'SELECT product_name, product_code, product_barcode FROM products WHERE product_id = $1',
+        'SELECT pro_name, pro_code, pro_barcode1 FROM product WHERE pro_id = $1',
         [productId]
       );
       return result.rows[0] || null;
@@ -220,13 +220,13 @@ class PrescriptionLogsModel {
       const query = `
         SELECT 
           pl.*,
-          m.mem_name,
+          m.mem_namesite,
           m.mem_code,
-          p.product_name as current_product_name,
-          p.product_code as current_product_code
+          p.pro_name as current_product_name,
+          p.pro_code as current_product_code
         FROM prescription_logs pl
-        JOIN members m ON pl.mem_id = m.mem_id
-        LEFT JOIN products p ON pl.product_id = p.product_id
+        JOIN member m ON pl.mem_id = m.mem_id
+        LEFT JOIN product p ON pl.product_id = p.pro_id
         WHERE pl.patient_name ILIKE $1
         ORDER BY pl.created_at DESC
         LIMIT $2 OFFSET $3
