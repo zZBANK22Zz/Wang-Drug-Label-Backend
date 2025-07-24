@@ -11,7 +11,6 @@ class PrescriptionLogsModel {
         INSERT INTO prescription_logs (
           mem_id,
           product_id,
-          patient_name,
           product_name_snapshot,
           product_code_snapshot,
           product_barcode_snapshot,
@@ -43,7 +42,7 @@ class PrescriptionLogsModel {
         ) VALUES (
           $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
           $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-          $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31
+          $21, $22, $23, $24, $25, $26, $27, $28, $29, $30
         )
         RETURNING id, created_at
       `;
@@ -51,7 +50,6 @@ class PrescriptionLogsModel {
       const values = [
         logData.mem_id,
         logData.product_id,
-        logData.patient_name,
         logData.product_name_snapshot,
         logData.product_code_snapshot || null,
         logData.product_barcode_snapshot || null,

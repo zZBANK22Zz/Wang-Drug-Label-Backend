@@ -9,25 +9,24 @@ class PrescriptionLogsController {
       const {
         mem_id,
         product_id,
-        patient_name,
         product_name_snapshot
       } = req.body;
 
       // Validation ข้อมูลที่จำเป็น
-      if (!mem_id || !product_id || !patient_name || !product_name_snapshot) {
+      if (!mem_id || !product_id || !product_name_snapshot) {
         return res.status(400).json({
           success: false,
-          message: 'ข้อมูลไม่ครบถ้วน: mem_id, product_id, patient_name, product_name_snapshot จำเป็นต้องระบุ'
+          message: 'ข้อมูลไม่ครบถ้วน: mem_id, product_id, product_name_snapshot จำเป็นต้องระบุ'
         });
       }
 
-      // ตรวจสอบ patient_name ไม่เป็นค่าว่าง
-      if (!patient_name.trim()) {
-        return res.status(400).json({
-          success: false,
-          message: 'กรุณาระบุชื่อผู้ป่วย'
-        });
-      }
+      // // ตรวจสอบ patient_name ไม่เป็นค่าว่าง
+      // if (!patient_name.trim()) {
+      //   return res.status(400).json({
+      //     success: false,
+      //     message: 'กรุณาระบุชื่อผู้ป่วย'
+      //   });
+      // }
 
       // ตรวจสอบว่า member มีอยู่จริง
       const memberExists = await PrescriptionLogsModel.checkMemberExists(mem_id);

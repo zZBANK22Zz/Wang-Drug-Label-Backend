@@ -3,13 +3,13 @@ const cors = require('cors');
 require('dotenv').config();
 
 // Import routes และ middleware
-const memberRoutes = require('../src/routes/memberRoutes');
-const productRoutes = require('../src/routes/productRoutes');
-const prescriptionLogsRoute = require('../src/routes/prescription-logsRoute');
-const productPharmaRoutes = require('../src/routes/productPharmaRoutes')
-const { requestLogger, errorHandler, notFound, validateJSON } = require('../src/middleware');
+const memberRoutes = require('./routes/memberRoutes');
+const productRoutes = require('./routes/productRoutes');
+const prescriptionLogsRoute = require('./routes/prescription-logsRoute');
+const productPharmaRoutes = require('./routes/productPharmaRoutes')
+const { requestLogger, errorHandler, notFound, validateJSON } = require('./middleware');
 const pharmaVerify = require('./routes/pharma-verify')
-const pharmaPersonalRoutes = require('../src/routes/pharmaPersonalRoutes')
+const pharmaPersonalRoutes = require('./routes/pharmaPersonalRoutes')
 
 const app = express();
 const PORT = process.env.PORT;
