@@ -1,3 +1,6 @@
+// ===================================
+// src/services/kafkaHandlers.js (FIXED WITH CONTROLLERS)
+// ===================================
 const axios = require('axios');
 const { publishMessage } = require('../config/kafka');
 
@@ -10,99 +13,133 @@ class KafkaMessageHandler {
     this.containerRole = process.env.CONTAINER_ROLE || 'main';
     this.mainBackendUrl = process.env.MAIN_BACKEND_URL;
     this.secondBackendUrl = process.env.SECOND_BACKEND_URL;
+    
+    // 🆕 Track processed messages to prevent duplicates
+    this.processedMessages = new Map();
   }
 
   async processMessage(message) {
-    const { topic, value, key } = message;
+    const { topic, value, key, offset, partition } = message;
+    
+    // 🔒 Create unique message ID for idempotency
+    const messageId = `${topic}-${partition}-${offset}`;
+    const keyId = key ? key.replace(/"/g, '') : null; // Remove quotes from key
     
     try {
-      console.log(`🔄 Processing message - Topic: ${topic}, Container: ${this.containerRole}`);
+      // 🔍 Check if this exact message was already processed
+      if (this.processedMessages.has(messageId)) {
+        console.log(`⏭️ ${this.containerRole} Backend: Message already processed, skipping:`, {
+          messageId,
+          topic,
+          key: keyId
+        });
+        return;
+      }
+
+      console.log(`🔄 ${this.containerRole} Backend processing:`, {
+        messageId,
+        topic,
+        eventType: value?.eventType,
+        source: value?.source,
+        key: keyId
+      });
       
       switch (topic) {
         case 'product-events':
-          await this.handleProductEvent(value, key);
+          await this.handleProductEvent(value, keyId, messageId);
           break;
         case 'member-events':
-          await this.handleMemberEvent(value, key);
+          await this.handleMemberEvent(value, keyId, messageId);
           break;
         case 'prescription-events':
-          await this.handlePrescriptionEvent(value, key);
+          await this.handlePrescriptionEvent(value, keyId, messageId);
           break;
         case 'pharma-events':
-          await this.handlePharmaEvent(value, key);
+          await this.handlePharmaEvent(value, keyId, messageId);
           break;
         case 'dead-letter-queue':
-          await this.handleDeadLetterMessage(value, key);
+          await this.handleDeadLetterMessage(value, keyId);
           break;
         default:
           console.warn('🟡 Unknown topic:', topic);
+          return;
       }
+      
+      // ✅ Mark message as processed
+      this.processedMessages.set(messageId, {
+        timestamp: Date.now(),
+        topic,
+        key: keyId,
+        eventType: value?.eventType,
+        container: this.containerRole
+      });
+      
+      // 🧹 Clean up old processed messages (keep only last 1000)
+      if (this.processedMessages.size > 1000) {
+        const oldestKey = this.processedMessages.keys().next().value;
+        this.processedMessages.delete(oldestKey);
+      }
+      
     } catch (error) {
       console.error('❌ Error processing message:', error);
       await this.handleFailedMessage(message, error);
     }
   }
 
-  async handleProductEvent(data, key) {
+  async handleProductEvent(data, key, messageId) {
     console.log('🛍️ Processing product event:', { 
+      messageId,
       key, 
       eventType: data.eventType, 
       source: data.source,
       container: this.containerRole 
     });
     
-    if (this.containerRole === 'secondary') {
-      // Second backend: Forward to main backend
-      await this.forwardToMainBackend('product', data);
-    } else {
-      // Main backend: Process directly
-      await this.processProductData(data);
+    try {
+      await this.processProductData(data, key, messageId);
+    } catch (error) {
+      console.error('❌ Product event processing failed:', error);
+      throw error;
     }
   }
 
-  async handleMemberEvent(data, key) {
+  async handleMemberEvent(data, key, messageId) {
     console.log('👤 Processing member event:', { 
+      messageId,
       key, 
       eventType: data.eventType, 
       source: data.source,
       container: this.containerRole 
     });
     
-    if (this.containerRole === 'secondary') {
-      // Second backend: Forward to main backend
-      await this.forwardToMainBackend('member', data);
-    } else {
-      // Main backend: Process directly
-      await this.processMemberData(data);
+    try {
+      await this.processMemberData(data, key, messageId);
+    } catch (error) {
+      console.error('❌ Member event processing failed:', error);
+      throw error;
     }
   }
 
-  async handlePrescriptionEvent(data, key) {
+  async handlePrescriptionEvent(data, key, messageId) {
     console.log('💊 Processing prescription event:', { 
+      messageId,
       key, 
       eventType: data.eventType,
       container: this.containerRole 
     });
     
-    if (this.containerRole === 'secondary') {
-      await this.forwardToMainBackend('prescription', data);
-    } else {
-      await this.processPrescriptionData(data);
-    }
+    console.log('⏭️ Prescription processing not implemented yet');
   }
 
-  async handlePharmaEvent(data, key) {
+  async handlePharmaEvent(data, key, messageId) {
     console.log('⚗️ Processing pharma event:', { 
+      messageId,
       key, 
       eventType: data.eventType,
       container: this.containerRole 
     });
     
-    if (this.containerRole === 'secondary') {
-      await this.forwardToMainBackend('pharma', data);
-    } else {
-      await this.processPharmaData(data);
-    }
+    console.log('⏭️ Pharma processing not implemented yet');
   }
 
   async handleDeadLetterMessage(data, key) {
@@ -112,73 +149,41 @@ class KafkaMessageHandler {
       error: data.error,
       container: this.containerRole 
     });
-    
-    // Log for monitoring/alerting
-    // TODO: Implement proper dead letter handling (retry, alert, etc.)
   }
 
-  async forwardToMainBackend(dataType, data) {
-    try {
-      const response = await axios.post(
-        `${this.mainBackendUrl}/api/internal/${dataType}`,
-        data,
-        {
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Internal-Request': 'true',
-            'X-Source-Container': this.containerRole
-          },
-          timeout: 10000
-        }
-      );
-
-      console.log('✅ Forwarded to main backend:', { 
-        dataType, 
-        status: response.status,
-        container: response.data?.container 
-      });
-    } catch (error) {
-      console.error('❌ Failed to forward to main backend:', error.message);
-      
-      // If main backend is down, try to process locally or queue for retry
-      if (error.code === 'ECONNREFUSED' || error.response?.status >= 500) {
-        console.log('🔄 Main backend unavailable, processing locally...');
-        await this.processDataLocally(dataType, data);
-      } else {
-        throw error;
-      }
-    }
-  }
-
-  async processProductData(data) {
-    const { eventType, productData, source } = data;
+  // ===================================
+  // 🔧 IDEMPOTENT Product Processing
+  // ===================================
+  async processProductData(data, key, messageId) {
+    const { eventType, data: eventData, source } = data;
     
     try {
-      console.log(`🛍️ Processing product data - Type: ${eventType}, Source: ${source}`);
+      console.log(`🛍️ Processing product data - Type: ${eventType}, Source: ${source}, MessageId: ${messageId}`);
       
       switch (eventType) {
-        case 'CREATE':
-          console.log('Creating product:', productData.pro_name || productData.name);
-          // TODO: เรียกใช้ ProductController.addProduct หรือ database operation
-          // await this.createProduct(productData);
+        case 'ADD_PRODUCT_WITH_PHARMA':
+          console.log('Creating product with pharma:', eventData.product?.pro_name || eventData.product?.name);
+          await this.createProductWithPharmaIdempotent(eventData, key, messageId);
           break;
           
-        case 'UPDATE':
-          console.log('Updating product:', productData.pro_id || productData.id);
-          // TODO: เรียกใช้ ProductController.updateProduct
-          // await this.updateProduct(productData);
+        case 'UPDATE_PRODUCT_WITH_PHARMA':
+          console.log('Updating product with pharma:', eventData.productId || eventData.id);
+          await this.updateProductWithPharmaIdempotent(eventData, key, messageId);
           break;
           
         case 'DELETE':
-          console.log('Deleting product:', productData.pro_id || productData.id);
-          // TODO: เรียกใช้ ProductController.deleteProduct
-          // await this.deleteProduct(productData);
+          console.log('Deleting product:', eventData.productId || eventData.id);
+          console.log('⏭️ Delete product not implemented yet');
           break;
           
         case 'STOCK_UPDATE':
-          console.log('Updating stock for product:', productData.pro_id || productData.id);
-          // TODO: เรียกใช้ ProductController.updateStock
-          // await this.updateProductStock(productData);
+          console.log('Updating stock for product:', eventData.productId || eventData.id);
+          console.log('⏭️ Stock update not implemented yet');
+          break;
+          
+        case 'BULK_STOCK_UPDATE':
+          console.log('Processing bulk stock update:', eventData.batch_id);
+          console.log('⏭️ Bulk stock update not implemented yet');
           break;
           
         default:
@@ -190,29 +195,29 @@ class KafkaMessageHandler {
     }
   }
 
-  async processMemberData(data) {
-    const { eventType, memberData, source } = data;
+  // ===================================
+  // 🔧 IDEMPOTENT Member Processing  
+  // ===================================
+  async processMemberData(data, key, messageId) {
+    const { eventType, data: eventData, source } = data;
     
     try {
-      console.log(`👤 Processing member data - Type: ${eventType}, Source: ${source}`);
+      console.log(`👤 Processing member data - Type: ${eventType}, Source: ${source}, MessageId: ${messageId}`);
       
       switch (eventType) {
-        case 'CREATE':
-          console.log('Creating member:', memberData.mem_username || memberData.username);
-          // TODO: เรียกใช้ MemberController.addMember
-          // await this.createMember(memberData);
+        case 'ADD_MEMBER':
+          console.log('Creating member:', eventData.mem_username || eventData.username);
+          await this.createMemberIdempotent(eventData, key, messageId);
           break;
           
-        case 'UPDATE':
-          console.log('Updating member:', memberData.mem_id || memberData.id);
-          // TODO: เรียกใช้ MemberController.updateMember
-          // await this.updateMember(memberData);
+        case 'UPDATE_MEMBER':
+          console.log('Updating member:', eventData.memberId || eventData.mem_username);
+          await this.updateMemberIdempotent(eventData, key, messageId);
           break;
           
         case 'DELETE':
-          console.log('Deleting member:', memberData.mem_id || memberData.id);
-          // TODO: เรียกใช้ MemberController.deleteMember
-          // await this.deleteMember(memberData);
+          console.log('Deleting member:', eventData.memberId || eventData.mem_username);
+          console.log('⏭️ Delete member not implemented yet');
           break;
           
         default:
@@ -224,91 +229,442 @@ class KafkaMessageHandler {
     }
   }
 
-  async processPrescriptionData(data) {
-    const { eventType, prescriptionData, source } = data;
+  // ===================================
+  // 🔒 IDEMPOTENT Product Methods
+  // ===================================
+  async createProductWithPharmaIdempotent(data, key, messageId) {
+    const productCode = data.product?.pro_code;
     
     try {
-      console.log(`💊 Processing prescription data - Type: ${eventType}, Source: ${source}`);
+      console.log(`🆕 Creating product with pharma (idempotent):`, data.product?.pro_name);
+      console.log(`🔍 Checking if product exists: ${productCode}`);
       
-      switch (eventType) {
-        case 'CREATE':
-          console.log('Creating prescription log');
-          // TODO: เรียกใช้ PrescriptionLogsController
-          break;
-          
-        case 'UPDATE':
-          console.log('Updating prescription log');
-          // TODO: เรียกใช้ PrescriptionLogsController
-          break;
-          
-        default:
-          console.warn('Unknown prescription event type:', eventType);
+      // 🔍 Check if product already exists
+      const existingProduct = await this.checkProductExists(productCode);
+      
+      if (existingProduct) {
+        console.log(`⚠️ Product ${productCode} already exists, skipping creation:`, {
+          messageId,
+          container: this.containerRole,
+          existingProduct: existingProduct.pro_name
+        });
+        return {
+          status: 'skipped',
+          reason: 'product_already_exists',
+          productCode,
+          container: this.containerRole
+        };
       }
+      
+      // 🆕 Product doesn't exist, proceed with creation using controller
+      const mockReq = {
+        body: {
+          product: data.product,
+          pharma: data.pharma
+        }
+      };
+      
+      const mockRes = {
+        status: (code) => ({
+          json: (result) => {
+            if (code === 201) {
+              console.log(`✅ Product created successfully:`, result.data?.product?.pro_code);
+            } else {
+              console.error(`❌ Product creation failed (${code}):`, result.message);
+              
+              // 🔍 Check if it's a duplicate error
+              if (result.message && result.message.includes('duplicate key')) {
+                console.log(`🔄 Duplicate detected during creation, product may have been created by another backend`);
+                return result; // Don't throw error for duplicates
+              }
+              
+              throw new Error(result.message);
+            }
+            return result;
+          }
+        }),
+        json: (result) => {
+          console.log(`✅ Product created:`, result.data?.product?.pro_code);
+          return result;
+        }
+      };
+      
+      await ProductController.addProductWithPharma(mockReq, mockRes);
+      
+      console.log(`✅ ${this.containerRole} Backend successfully created product: ${productCode}`);
+      
     } catch (error) {
-      console.error('❌ Error processing prescription data:', error);
+      // 🔍 Handle duplicate key errors gracefully
+      if (error.message && (error.message.includes('duplicate key') || error.message.includes('already exists'))) {
+        console.log(`⚠️ Product ${productCode} was created by another backend during processing:`, {
+          messageId,
+          container: this.containerRole,
+          error: error.message
+        });
+        return {
+          status: 'duplicate_handled',
+          reason: 'created_by_another_backend',
+          productCode,
+          container: this.containerRole
+        };
+      }
+      
+      console.error(`❌ Create product with pharma failed:`, error);
       throw error;
     }
   }
 
-  async processPharmaData(data) {
-    const { eventType, pharmaData, source } = data;
-    
+  async updateProductWithPharmaIdempotent(data, key, messageId) {
     try {
-      console.log(`⚗️ Processing pharma data - Type: ${eventType}, Source: ${source}`);
+      console.log(`🔄 Updating product with pharma (idempotent):`, data.productId || data.pro_code);
       
-      switch (eventType) {
-        case 'VERIFY_REQUEST':
-          console.log('Processing pharma verification request');
-          // TODO: เรียกใช้ pharma verify logic
-          break;
-          
-        case 'PERSONAL_UPDATE':
-          console.log('Updating personal pharma data');
-          // TODO: เรียกใช้ PharmaPersonalController
-          break;
-          
-        default:
-          console.warn('Unknown pharma event type:', eventType);
-      }
+      const mockReq = {
+        params: { id: data.productId },
+        body: {
+          product: data.product,
+          pharma: data.pharma
+        }
+      };
+      
+      const mockRes = {
+        status: (code) => ({
+          json: (result) => {
+            if (code === 200) {
+              console.log(`✅ Product updated successfully:`, result.data?.product?.pro_code);
+            } else {
+              console.error(`❌ Product update failed (${code}):`, result.message);
+              throw new Error(result.message);
+            }
+            return result;
+          }
+        }),
+        json: (result) => {
+          console.log(`✅ Product updated:`, result.data?.product?.pro_code);
+          return result;
+        }
+      };
+      
+      await ProductController.updateProductWithPharma(mockReq, mockRes);
+      
     } catch (error) {
-      console.error('❌ Error processing pharma data:', error);
+      console.error(`❌ Update product with pharma failed:`, error);
       throw error;
     }
   }
 
-  async processDataLocally(dataType, data) {
-    // Process data locally when main backend is unavailable
+  // ===================================
+  // 🔒 IDEMPOTENT Member Methods (USING CONTROLLERS)
+  // ===================================
+  async createMemberIdempotent(data, key, messageId) {
     try {
-      console.log(`🔄 Processing ${dataType} locally due to main backend unavailability`);
+      console.log(`👤 Creating member (idempotent):`, data.mem_username);
       
-      if (dataType === 'product') {
-        await this.processProductData(data);
-      } else if (dataType === 'member') {
-        await this.processMemberData(data);
-      } else if (dataType === 'prescription') {
-        await this.processPrescriptionData(data);
-      } else if (dataType === 'pharma') {
-        await this.processPharmaData(data);
+      // 🔍 Check if member already exists
+      const existingMember = await this.checkMemberExists(data.mem_username);
+      
+      if (existingMember) {
+        console.log(`⚠️ Member ${data.mem_username} already exists, skipping creation:`, {
+          messageId,
+          container: this.containerRole,
+          existingMember: existingMember.mem_nameSite
+        });
+        return {
+          status: 'skipped',
+          reason: 'member_already_exists',
+          username: data.mem_username,
+          container: this.containerRole
+        };
       }
+      
+      // Generate password for external members if not provided
+      if (!data.mem_password) {
+        data.mem_password = this.generatePassword();
+        console.log(`🔑 Generated password for external member: ${data.mem_username}`);
+      }
+      
+      // ✅ USE MEMBER CONTROLLER
+      const mockReq = { body: data };
+      const mockRes = {
+        status: (code) => ({
+          json: (result) => {
+            if (code === 201) {
+              console.log(`✅ Member created successfully:`, result.data?.mem_username);
+            } else {
+              console.error(`❌ Member creation failed (${code}):`, result.message);
+              
+              // Handle duplicate gracefully  
+              if (result.message && result.message.includes('duplicate')) {
+                console.log(`🔄 Duplicate member detected during creation`);
+                return result;
+              }
+              
+              throw new Error(result.message);
+            }
+            return result;
+          }
+        }),
+        json: (result) => {
+          console.log(`✅ Member created:`, result.data?.mem_username);
+          return result;
+        }
+      };
+      
+      // 🔧 USE ACTUAL MemberController.addMember
+      try {
+        console.log(`🔧 Using MemberController.addMember`);
+        await MemberController.addMember(mockReq, mockRes);
+      } catch (controllerError) {
+        console.error(`❌ MemberController.addMember failed:`, controllerError.message);
+        
+        // Handle duplicate errors gracefully
+        if (controllerError.message.includes('already exists') || controllerError.message.includes('duplicate')) {
+          console.log(`⚠️ Duplicate member detected in controller`);
+          return {
+            status: 'duplicate_handled',
+            reason: 'member_already_exists_controller',
+            username: data.mem_username,
+            container: this.containerRole
+          };
+        }
+        
+        throw controllerError;
+      }
+      
     } catch (error) {
-      console.error('❌ Error processing data locally:', error);
-      // Queue for retry when main backend is back online
-      await this.queueForRetry(dataType, data);
+      // Handle duplicate key errors gracefully
+      if (error.code === '23505' && error.constraint === 'member_mem_username_key') {
+        console.log(`⚠️ Member ${data.mem_username} was created by another backend:`, {
+          messageId,
+          container: this.containerRole
+        });
+        return {
+          status: 'duplicate_handled',
+          reason: 'created_by_another_backend',
+          username: data.mem_username,
+          container: this.containerRole
+        };
+      }
+      
+      console.error(`❌ Create member failed:`, error);
+      throw error;
     }
   }
 
-  async queueForRetry(dataType, data) {
-    // Publish to retry topic or store in database for later processing
+  async updateMemberIdempotent(data, key, messageId) {
     try {
-      await publishMessage(`${dataType}-retry`, {
-        originalData: data,
-        retryCount: (data.retryCount || 0) + 1,
-        timestamp: Date.now(),
-        containerRole: this.containerRole
+      const memberId = data.memberId || data.mem_username;
+      console.log(`🔄 Updating member (idempotent):`, memberId);
+      
+      // 🔍 First, get member ID from username (since controller needs ID)
+      let memberIdForController = memberId;
+      
+      // If memberId is username, need to find actual ID
+      if (isNaN(memberId)) {
+        console.log(`🔍 Looking up member ID for username: ${memberId}`);
+        const existingMember = await this.getMemberByUsername(memberId);
+        
+        if (!existingMember) {
+          throw new Error(`Member not found: ${memberId}`);
+        }
+        
+        memberIdForController = existingMember.mem_id;
+        console.log(`✅ Found member ID: ${memberIdForController} for username: ${memberId}`);
+      }
+      
+      // ✅ USE MemberController.updateMember with correct ID
+      const mockReq = {
+        params: { id: memberIdForController }, // Use actual member ID
+        body: data
+      };
+      
+      const mockRes = {
+        status: (code) => ({
+          json: (result) => {
+            if (code === 200) {
+              console.log(`✅ Member updated successfully:`, result.data?.mem_username);
+            } else {
+              console.error(`❌ Member update failed (${code}):`, result.message);
+              throw new Error(result.message);
+            }
+            return result;
+          }
+        }),
+        json: (result) => {
+          console.log(`✅ Member updated:`, result.data?.mem_username);
+          return result;
+        }
+      };
+      
+      // 🔧 USE ACTUAL MemberController.updateMember
+      try {
+        console.log(`🔧 Using MemberController.updateMember with ID: ${memberIdForController}`);
+        await MemberController.updateMember(mockReq, mockRes);
+      } catch (controllerError) {
+        console.error(`❌ MemberController.updateMember failed:`, controllerError.message);
+        
+        // If controller fails, fallback to direct DB
+        console.log(`⚠️ Falling back to direct DB update`);
+        await this.updateMemberDirect(data);
+      }
+      
+    } catch (error) {
+      console.error(`❌ Update member failed:`, error);
+      throw error;
+    }
+  }
+
+  // ===================================
+  // 🔧 DIRECT DB OPERATIONS (FALLBACK)
+  // ===================================
+  async createMemberDirect(data) {
+    try {
+      console.log(`🔧 Creating member directly in database:`, data.mem_username);
+      
+      const pool = require('../config/database');
+      
+      const query = `
+        INSERT INTO member (
+          mem_username, mem_password, mem_nameSite, mem_license, mem_type,
+          mem_province, mem_address, mem_amphur, mem_tumbon, mem_post,
+          mem_taxid, mem_office, mem_daystart, mem_dayend, mem_timestart,
+          mem_timeend, mem_price, mem_comments
+        ) VALUES (
+          $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
+          $11, $12, $13, $14, $15, $16, $17, $18
+        ) RETURNING *
+      `;
+      
+      const values = [
+        data.mem_username, data.mem_password, data.mem_nameSite,
+        data.mem_license, data.mem_type || 1, data.mem_province,
+        data.mem_address, data.mem_amphur, data.mem_tumbon,
+        data.mem_post, data.mem_taxid, data.mem_office || "1",
+        data.mem_daystart, data.mem_dayend, data.mem_timestart,
+        data.mem_timeend, data.mem_price, data.mem_comments
+      ];
+      
+      const result = await pool.query(query, values);
+      
+      console.log(`✅ Member created directly:`, {
+        username: result.rows[0].mem_username,
+        nameSite: result.rows[0].mem_nameSite,
+        container: this.containerRole
       });
-      console.log('📝 Queued for retry:', dataType);
+      
     } catch (error) {
-      console.error('❌ Failed to queue for retry:', error);
+      console.error(`❌ Direct member creation failed:`, error);
+      throw error;
+    }
+  }
+
+  async updateMemberDirect(data) {
+    try {
+      const memberId = data.memberId || data.mem_username;
+      console.log(`🔧 Updating member directly in database:`, memberId);
+      
+      const pool = require('../config/database');
+      
+      // Build dynamic update query with PROPER parameter binding
+      const updateFields = [];
+      const values = [];
+      let paramIndex = 1;
+      
+      const updatableFields = [
+        'mem_password', 'mem_nameSite', 'mem_license', 'mem_type',
+        'mem_province', 'mem_address', 'mem_amphur', 'mem_tumbon',
+        'mem_post', 'mem_taxid', 'mem_office', 'mem_daystart',
+        'mem_dayend', 'mem_timestart', 'mem_timeend', 'mem_price', 'mem_comments'
+      ];
+      
+      updatableFields.forEach(field => {
+        if (data[field] !== undefined) {
+          updateFields.push(`${field} = $${paramIndex}`);  // ✅ FIXED: Use $paramIndex
+          values.push(data[field]);
+          paramIndex++;
+        }
+      });
+      
+      if (updateFields.length === 0) {
+        console.log(`⚠️ No fields to update for member: ${memberId}`);
+        return;
+      }
+      
+      const query = `
+        UPDATE member 
+        SET ${updateFields.join(', ')}
+        WHERE mem_username = $${paramIndex}
+        RETURNING *
+      `;
+      
+      values.push(memberId);
+      
+      console.log(`🔍 Direct updating member: ${memberId}, fields: ${updateFields.length}`);
+      console.log(`🔍 Query:`, query);
+      console.log(`🔍 Values:`, values);
+      
+      const result = await pool.query(query, values);
+      
+      if (result.rows.length === 0) {
+        throw new Error(`Member not found: ${memberId}`);
+      }
+      
+      console.log(`✅ Member updated directly:`, {
+        username: result.rows[0].mem_username,
+        nameSite: result.rows[0].mem_nameSite,
+        updatedFields: updateFields.length
+      });
+      
+    } catch (error) {
+      console.error(`❌ Direct member update failed:`, error);
+      throw error;
+    }
+  }
+
+  // ===================================
+  // 🔍 Helper Methods
+  // ===================================
+  async checkProductExists(productCode) {
+    try {
+      const pool = require('../config/database');
+      const result = await pool.query(
+        'SELECT pro_code, pro_name FROM product WHERE pro_code = $1',
+        [productCode]
+      );
+      
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } catch (error) {
+      console.error('❌ Error checking product existence:', error);
+      return null;
+    }
+  }
+
+  async checkMemberExists(username) {
+    try {
+      const pool = require('../config/database');
+      const result = await pool.query(
+        'SELECT mem_username, mem_nameSite FROM member WHERE mem_username = $1',
+        [username]
+      );
+      
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } catch (error) {
+      console.error('❌ Error checking member existence:', error);
+      return null;
+    }
+  }
+
+  async getMemberByUsername(username) {
+    try {
+      const pool = require('../config/database');
+      const result = await pool.query(
+        'SELECT mem_id, mem_username, mem_nameSite FROM member WHERE mem_username = $1',
+        [username]
+      );
+      
+      return result.rows.length > 0 ? result.rows[0] : null;
+    } catch (error) {
+      console.error('❌ Error getting member by username:', error);
+      return null;
     }
   }
 
@@ -320,7 +676,6 @@ class KafkaMessageHandler {
       container: this.containerRole
     });
 
-    // Implement dead letter queue logic
     try {
       await publishMessage('dead-letter-queue', {
         originalMessage: message,
@@ -333,35 +688,13 @@ class KafkaMessageHandler {
     }
   }
 
-  // Helper methods สำหรับจัดการข้อมูล (TODO: implement เมื่อต้องการ)
-  async createProduct(productData) {
-    // Implementation for creating product
-    console.log('Creating product in database:', productData);
-  }
-
-  async updateProduct(productData) {
-    // Implementation for updating product
-    console.log('Updating product in database:', productData);
-  }
-
-  async deleteProduct(productData) {
-    // Implementation for deleting product
-    console.log('Deleting product from database:', productData);
-  }
-
-  async createMember(memberData) {
-    // Implementation for creating member
-    console.log('Creating member in database:', memberData);
-  }
-
-  async updateMember(memberData) {
-    // Implementation for updating member
-    console.log('Updating member in database:', memberData);
-  }
-
-  async deleteMember(memberData) {
-    // Implementation for deleting member
-    console.log('Deleting member from database:', memberData);
+  generatePassword(length = 8) {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let password = '';
+    for (let i = 0; i < length; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
   }
 }
 

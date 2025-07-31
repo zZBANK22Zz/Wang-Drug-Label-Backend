@@ -11,7 +11,8 @@ const router = express.Router();
 // GET /api/products - ดึงข้อมูล products ทั้งหมด (พร้อม filtering)
 // Query parameters: search, drug_type, stock_status, min_price, max_price, min_rating, sort_by, sort_order, limit, offset
 router.get('/', ProductController.getAllProducts);
-router.post('/with-pharma', ProductController.addProductWithPharma);
+router.post('/with-pharma', ProductController.addProductWithPharma); // เพิ่ม product พร้อมกับ product_pharma
+router.put('/:id/with-pharma', ProductController.updateProductWithPharma); // อัพเดท product พร้อมกับ product_pharma
 
 // GET /api/products/test-db - ทดสอบการเชื่อมต่อ database
 router.get('/test-db', ProductController.testDatabase);

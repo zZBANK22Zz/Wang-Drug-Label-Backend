@@ -1,4 +1,4 @@
-const pool = require('../config/database');
+const pool = require("../config/database");
 
 class ProductModel {
   // ตรวจสอบ table structure
@@ -19,7 +19,7 @@ class ProductModel {
   // สร้าง product ใหม่ (แก้ไขแล้ว) - รองรับ transaction
   static async createProduct(productData, client = null) {
     const dbClient = client || pool; // ใช้ client ที่ส่งมา หรือ pool ปกติ
-    
+
     const {
       pro_code,
       pro_name,
@@ -44,34 +44,34 @@ class ProductModel {
       pro_price3,
       pro_limitcontrol,
       pro_pricethai,
-      pro_instock = 0.00,
+      pro_instock = 0.0,
       pro_imgmain,
       pro_img,
       pro_imgu1,
       pro_imgu2,
       pro_imgu3,
-      pro_glwa1 = '0',
-      pro_glwa2 = '0',
-      pro_glwa3 = '0',
-      pro_glwa4 = '0',
-      pro_glwa5 = '0',
-      pro_glwa6 = '0',
-      pro_glwa7 = '0',
-      pro_glwa8 = '0',
-      pro_glwa9 = '0',
-      pro_glwa10 = '0',
+      pro_glwa1 = "0",
+      pro_glwa2 = "0",
+      pro_glwa3 = "0",
+      pro_glwa4 = "0",
+      pro_glwa5 = "0",
+      pro_glwa6 = "0",
+      pro_glwa7 = "0",
+      pro_glwa8 = "0",
+      pro_glwa9 = "0",
+      pro_glwa10 = "0",
       pro_drugregister,
-      pro_ps1 = '0',
-      pro_ps2 = '0',
-      pro_ps3 = '0',
-      pro_ps4 = '0',
-      pro_ps5 = '0',
-      pro_ps6 = '0',
-      pro_ps7 = '0',
-      pro_ps8 = '0',
+      pro_ps1 = "0",
+      pro_ps2 = "0",
+      pro_ps3 = "0",
+      pro_ps4 = "0",
+      pro_ps5 = "0",
+      pro_ps6 = "0",
+      pro_ps7 = "0",
+      pro_ps8 = "0",
       pro_point = 0,
       pro_view = 0,
-      pro_rating = 0.0
+      pro_rating = 0.0,
     } = productData;
 
     // แก้ไข: ใช้ VALUES เท่ากับ columns (51 ตัว)
@@ -95,38 +95,79 @@ class ProductModel {
     `;
 
     const values = [
-      pro_code, pro_name, pro_proname || null, pro_nameeng || null, pro_nameth || null,
-      pro_genericname || null, pro_drugmain || null, pro_keysearch || null, pro_unit1 || null,
-      pro_ratio1 || null, pro_unit2 || null, pro_ratio2 || null, pro_unit3 || null,
-      pro_ratio3 || null, pro_supplies || null, pro_barcode1 || null, pro_barcode2 || null,
-      pro_barcode3 || null, pro_price1 || null, pro_price2 || null, pro_price3 || null,
-      pro_limitcontrol || null, pro_pricethai || null, pro_instock, pro_imgmain || null,
-      pro_img || null, pro_imgu1 || null, pro_imgu2 || null, pro_imgu3 || null,
-      pro_glwa1, pro_glwa2, pro_glwa3, pro_glwa4, pro_glwa5, pro_glwa6, pro_glwa7,
-      pro_glwa8, pro_glwa9, pro_glwa10, pro_drugregister || null, pro_ps1, pro_ps2,
-      pro_ps3, pro_ps4, pro_ps5, pro_ps6, pro_ps7, pro_ps8, pro_point, pro_view, pro_rating
+      pro_code,
+      pro_name,
+      pro_proname || null,
+      pro_nameeng || null,
+      pro_nameth || null,
+      pro_genericname || null,
+      pro_drugmain || null,
+      pro_keysearch || null,
+      pro_unit1 || null,
+      pro_ratio1 || null,
+      pro_unit2 || null,
+      pro_ratio2 || null,
+      pro_unit3 || null,
+      pro_ratio3 || null,
+      pro_supplies || null,
+      pro_barcode1 || null,
+      pro_barcode2 || null,
+      pro_barcode3 || null,
+      pro_price1 || null,
+      pro_price2 || null,
+      pro_price3 || null,
+      pro_limitcontrol || null,
+      pro_pricethai || null,
+      pro_instock,
+      pro_imgmain || null,
+      pro_img || null,
+      pro_imgu1 || null,
+      pro_imgu2 || null,
+      pro_imgu3 || null,
+      pro_glwa1,
+      pro_glwa2,
+      pro_glwa3,
+      pro_glwa4,
+      pro_glwa5,
+      pro_glwa6,
+      pro_glwa7,
+      pro_glwa8,
+      pro_glwa9,
+      pro_glwa10,
+      pro_drugregister || null,
+      pro_ps1,
+      pro_ps2,
+      pro_ps3,
+      pro_ps4,
+      pro_ps5,
+      pro_ps6,
+      pro_ps7,
+      pro_ps8,
+      pro_point,
+      pro_view,
+      pro_rating,
     ];
 
     try {
-      console.log('🔍 Creating product with:', {
+      console.log("🔍 Creating product with:", {
         columnsCount: 51,
         valuesCount: values.length,
-        productData: { pro_code, pro_name, pro_instock }
+        productData: { pro_code, pro_name, pro_instock },
       });
-      
+
       const result = await dbClient.query(query, values);
       return result.rows[0];
     } catch (error) {
-      console.error('❌ Create product error:', error.message);
-      console.error('Query:', query);
-      console.error('Values length:', values.length);
+      console.error("❌ Create product error:", error.message);
+      console.error("Query:", query);
+      console.error("Values length:", values.length);
       throw error;
     }
   }
 
   // สร้าง product แบบ minimal (สำหรับทดสอบ)
   static async createMinimalProduct(productData) {
-    const { pro_code, pro_name, pro_instock = 0.00 } = productData;
+    const { pro_code, pro_name, pro_instock = 0.0 } = productData;
 
     const query = `
       INSERT INTO product (pro_code, pro_name, pro_instock) 
@@ -137,18 +178,22 @@ class ProductModel {
     const values = [pro_code, pro_name, pro_instock];
 
     try {
-      console.log('🔍 Creating minimal product:', { pro_code, pro_name, pro_instock });
+      console.log("🔍 Creating minimal product:", {
+        pro_code,
+        pro_name,
+        pro_instock,
+      });
       const result = await pool.query(query, values);
       return result.rows[0];
     } catch (error) {
-      console.error('❌ Create minimal product error:', error.message);
+      console.error("❌ Create minimal product error:", error.message);
       throw error;
     }
   }
 
   // ดึงข้อมูล product ทั้งหมด
   static async getAllProducts(filters = {}) {
-    let query = 'SELECT * FROM product WHERE 1=1';
+    let query = "SELECT * FROM product WHERE 1=1";
     const values = [];
     let paramIndex = 1;
 
@@ -168,11 +213,11 @@ class ProductModel {
 
     // Filter by stock status
     if (filters.stock_status) {
-      if (filters.stock_status === 'low') {
+      if (filters.stock_status === "low") {
         query += ` AND pro_instock <= 10`;
-      } else if (filters.stock_status === 'out') {
+      } else if (filters.stock_status === "out") {
         query += ` AND pro_instock = 0`;
-      } else if (filters.stock_status === 'available') {
+      } else if (filters.stock_status === "available") {
         query += ` AND pro_instock > 0`;
       }
     }
@@ -198,10 +243,18 @@ class ProductModel {
     }
 
     // Sorting
-    const sortBy = filters.sort_by || 'pro_id';
-    const sortOrder = filters.sort_order || 'DESC';
-    const allowedSortFields = ['pro_id', 'pro_name', 'pro_code', 'pro_price1', 'pro_instock', 'pro_rating', 'pro_view'];
-    const finalSortBy = allowedSortFields.includes(sortBy) ? sortBy : 'pro_id';
+    const sortBy = filters.sort_by || "pro_id";
+    const sortOrder = filters.sort_order || "DESC";
+    const allowedSortFields = [
+      "pro_id",
+      "pro_name",
+      "pro_code",
+      "pro_price1",
+      "pro_instock",
+      "pro_rating",
+      "pro_view",
+    ];
+    const finalSortBy = allowedSortFields.includes(sortBy) ? sortBy : "pro_id";
     query += ` ORDER BY ${finalSortBy} ${sortOrder}`;
 
     // Pagination
@@ -227,8 +280,8 @@ class ProductModel {
 
   // ดึงข้อมูล product ตาม ID
   static async getProductById(id) {
-    const query = 'SELECT * FROM product WHERE pro_id = $1';
-    
+    const query = "SELECT * FROM product WHERE pro_id = $1";
+
     try {
       const result = await pool.query(query, [id]);
       return result.rows[0];
@@ -239,8 +292,8 @@ class ProductModel {
 
   // ดึงข้อมูล product ตาม code
   static async getProductByCode(pro_code) {
-    const query = 'SELECT * FROM product WHERE pro_code = $1';
-    
+    const query = "SELECT * FROM product WHERE pro_code = $1";
+
     try {
       const result = await pool.query(query, [pro_code]);
       return result.rows[0];
@@ -251,8 +304,9 @@ class ProductModel {
 
   // ดึงข้อมูล product ตาม barcode (รองรับ 3 barcode)
   static async getProductByBarcode(barcode) {
-    const query = 'SELECT * FROM product WHERE pro_barcode1 = $1 OR pro_barcode2 = $1 OR pro_barcode3 = $1';
-    
+    const query =
+      "SELECT * FROM product WHERE pro_barcode1 = $1 OR pro_barcode2 = $1 OR pro_barcode3 = $1";
+
     try {
       const result = await pool.query(query, [barcode]);
       return result.rows[0];
@@ -263,8 +317,8 @@ class ProductModel {
 
   // ตรวจสอบว่า pro_code ซ้ำหรือไม่
   static async checkProductCodeExists(pro_code) {
-    const query = 'SELECT COUNT(*) FROM product WHERE pro_code = $1';
-    
+    const query = "SELECT COUNT(*) FROM product WHERE pro_code = $1";
+
     try {
       const result = await pool.query(query, [pro_code]);
       return parseInt(result.rows[0].count) > 0;
@@ -275,8 +329,9 @@ class ProductModel {
 
   // ตรวจสอบว่า pro_code ซ้ำหรือไม่ (ยกเว้น product ปัจจุบัน)
   static async checkProductCodeExistsForUpdate(pro_code, exclude_pro_id) {
-    const query = 'SELECT COUNT(*) FROM product WHERE pro_code = $1 AND pro_id != $2';
-    
+    const query =
+      "SELECT COUNT(*) FROM product WHERE pro_code = $1 AND pro_id != $2";
+
     try {
       const result = await pool.query(query, [pro_code, exclude_pro_id]);
       return parseInt(result.rows[0].count) > 0;
@@ -285,8 +340,10 @@ class ProductModel {
     }
   }
 
-  // อัพเดทข้อมูล product
-  static async updateProduct(pro_id, updateData) {
+  // อัพเดทข้อมูล product (รองรับ transaction)
+  static async updateProduct(pro_id, updateData, client = null) {
+    const dbClient = client || pool; // ใช้ client ที่ส่งมา หรือ pool ปกติ
+
     try {
       // สร้าง dynamic query เฉพาะ fields ที่ส่งมา
       const updateFields = [];
@@ -295,14 +352,57 @@ class ProductModel {
 
       // Define allowed fields for update
       const allowedFields = [
-        'pro_code', 'pro_name', 'pro_proname', 'pro_nameeng', 'pro_nameth', 'pro_genericname',
-        'pro_drugmain', 'pro_keysearch', 'pro_unit1', 'pro_ratio1', 'pro_unit2', 'pro_ratio2',
-        'pro_unit3', 'pro_ratio3', 'pro_supplies', 'pro_barcode1', 'pro_barcode2', 'pro_barcode3',
-        'pro_price1', 'pro_price2', 'pro_price3', 'pro_limitcontrol', 'pro_pricethai', 'pro_instock',
-        'pro_imgmain', 'pro_img', 'pro_imgu1', 'pro_imgu2', 'pro_imgu3', 'pro_glwa1', 'pro_glwa2',
-        'pro_glwa3', 'pro_glwa4', 'pro_glwa5', 'pro_glwa6', 'pro_glwa7', 'pro_glwa8', 'pro_glwa9',
-        'pro_glwa10', 'pro_drugregister', 'pro_ps1', 'pro_ps2', 'pro_ps3', 'pro_ps4', 'pro_ps5',
-        'pro_ps6', 'pro_ps7', 'pro_ps8', 'pro_point', 'pro_view', 'pro_rating'
+        "pro_code",
+        "pro_name",
+        "pro_proname",
+        "pro_nameeng",
+        "pro_nameth",
+        "pro_genericname",
+        "pro_drugmain",
+        "pro_keysearch",
+        "pro_unit1",
+        "pro_ratio1",
+        "pro_unit2",
+        "pro_ratio2",
+        "pro_unit3",
+        "pro_ratio3",
+        "pro_supplies",
+        "pro_barcode1",
+        "pro_barcode2",
+        "pro_barcode3",
+        "pro_price1",
+        "pro_price2",
+        "pro_price3",
+        "pro_limitcontrol",
+        "pro_pricethai",
+        "pro_instock",
+        "pro_imgmain",
+        "pro_img",
+        "pro_imgu1",
+        "pro_imgu2",
+        "pro_imgu3",
+        "pro_glwa1",
+        "pro_glwa2",
+        "pro_glwa3",
+        "pro_glwa4",
+        "pro_glwa5",
+        "pro_glwa6",
+        "pro_glwa7",
+        "pro_glwa8",
+        "pro_glwa9",
+        "pro_glwa10",
+        "pro_drugregister",
+        "pro_ps1",
+        "pro_ps2",
+        "pro_ps3",
+        "pro_ps4",
+        "pro_ps5",
+        "pro_ps6",
+        "pro_ps7",
+        "pro_ps8",
+        "pro_point",
+        "pro_view",
+        "pro_rating",
       ];
 
       // Build dynamic update query
@@ -314,32 +414,83 @@ class ProductModel {
       }
 
       if (updateFields.length === 0) {
-        throw new Error('ไม่มีข้อมูลที่จะอัพเดท');
+        throw new Error("ไม่มีข้อมูลที่จะอัพเดท");
       }
 
       // Add pro_id for WHERE clause
       values.push(pro_id);
 
       const query = `
-        UPDATE product 
-        SET ${updateFields.join(', ')}
-        WHERE pro_id = $${paramIndex}
-        RETURNING *
-      `;
+      UPDATE product 
+      SET ${updateFields.join(", ")}
+      WHERE pro_id = $${paramIndex}
+      RETURNING *
+    `;
 
-      const result = await pool.query(query, values);
+      console.log("🔍 Updating product:", {
+        pro_id,
+        fieldsToUpdate: updateFields.length,
+        usingTransaction: !!client,
+      });
+
+      const result = await dbClient.query(query, values);
       return result.rows[0] || null;
+    } catch (error) {
+      console.error("❌ Update product error:", error.message);
+      throw error;
+    }
+  }
+
+  // ตรวจสอบว่า pro_code ซ้ำหรือไม่ (ยกเว้น product ปัจจุบัน) - รองรับ transaction
+  static async checkProductCodeExistsForUpdate(
+    pro_code,
+    exclude_pro_id,
+    client = null
+  ) {
+    const dbClient = client || pool; // ใช้ client ที่ส่งมา หรือ pool ปกติ
+    const query =
+      "SELECT COUNT(*) FROM product WHERE pro_code = $1 AND pro_id != $2";
+
+    try {
+      const result = await dbClient.query(query, [pro_code, exclude_pro_id]);
+      return parseInt(result.rows[0].count) > 0;
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // ดึงข้อมูล product ตาม code - รองรับ transaction
+  static async getProductByCode(pro_code, client = null) {
+    const dbClient = client || pool; // ใช้ client ที่ส่งมา หรือ pool ปกติ
+    const query = "SELECT * FROM product WHERE pro_code = $1";
+
+    try {
+      const result = await dbClient.query(query, [pro_code]);
+      return result.rows[0];
+    } catch (error) {
+      throw error;
+    }
+  }
+
+  // ดึงข้อมูล product ตาม ID - รองรับ transaction
+  static async getProductById(id, client = null) {
+    const dbClient = client || pool; // ใช้ client ที่ส่งมา หรือ pool ปกติ
+    const query = "SELECT * FROM product WHERE pro_id = $1";
+
+    try {
+      const result = await dbClient.query(query, [id]);
+      return result.rows[0];
     } catch (error) {
       throw error;
     }
   }
 
   // อัพเดท stock สินค้า
-  static async updateStock(pro_id, stock_change, operation = 'set') {
+  static async updateStock(pro_id, stock_change, operation = "set") {
     let query;
     let values;
 
-    if (operation === 'add') {
+    if (operation === "add") {
       query = `
         UPDATE product 
         SET pro_instock = pro_instock + $1
@@ -347,7 +498,7 @@ class ProductModel {
         RETURNING *
       `;
       values = [stock_change, pro_id];
-    } else if (operation === 'subtract') {
+    } else if (operation === "subtract") {
       query = `
         UPDATE product 
         SET pro_instock = GREATEST(pro_instock - $1, 0)
@@ -375,7 +526,11 @@ class ProductModel {
   }
 
   // อัพเดท rating และ view
-  static async updateRatingAndView(pro_id, rating = null, increment_view = false) {
+  static async updateRatingAndView(
+    pro_id,
+    rating = null,
+    increment_view = false
+  ) {
     let query;
     let values;
 
@@ -404,7 +559,7 @@ class ProductModel {
       `;
       values = [pro_id];
     } else {
-      throw new Error('No update operation specified');
+      throw new Error("No update operation specified");
     }
 
     try {
@@ -417,8 +572,8 @@ class ProductModel {
 
   // ลบ product
   static async deleteProduct(pro_id) {
-    const query = 'DELETE FROM product WHERE pro_id = $1 RETURNING *';
-    
+    const query = "DELETE FROM product WHERE pro_id = $1 RETURNING *";
+
     try {
       const result = await pool.query(query, [pro_id]);
       return result.rows[0];
@@ -434,7 +589,7 @@ class ProductModel {
       WHERE pro_instock <= $1 
       ORDER BY pro_instock ASC, pro_name ASC
     `;
-    
+
     try {
       const result = await pool.query(query, [threshold]);
       return result.rows;
@@ -450,7 +605,7 @@ class ProductModel {
       WHERE pro_drugmain ILIKE $1 
       ORDER BY pro_name ASC
     `;
-    
+
     try {
       const result = await pool.query(query, [`%${drugType}%`]);
       return result.rows;
@@ -467,7 +622,7 @@ class ProductModel {
       ORDER BY pro_rating DESC, pro_view DESC, pro_name ASC
       LIMIT $1
     `;
-    
+
     try {
       const result = await pool.query(query, [limit]);
       return result.rows;
@@ -491,7 +646,7 @@ class ProductModel {
         COUNT(CASE WHEN pro_rating >= 4.0 THEN 1 END) as high_rated_products
       FROM product
     `;
-    
+
     try {
       const result = await pool.query(query);
       return result.rows[0];
@@ -503,9 +658,9 @@ class ProductModel {
   // ทดสอบการเชื่อมต่อและดูตาราง
   static async testConnection() {
     try {
-      const result = await pool.query('SELECT NOW() as current_time');
-      console.log('✅ Database connected:', result.rows[0]);
-      
+      const result = await pool.query("SELECT NOW() as current_time");
+      console.log("✅ Database connected:", result.rows[0]);
+
       const tables = await pool.query(`
         SELECT table_name 
         FROM information_schema.tables 
@@ -513,21 +668,23 @@ class ProductModel {
         AND table_type = 'BASE TABLE'
         ORDER BY table_name
       `);
-      console.log('📋 Available tables:', tables.rows.map(row => row.table_name));
-      
+      console.log(
+        "📋 Available tables:",
+        tables.rows.map((row) => row.table_name)
+      );
+
       const columns = await pool.query(`
         SELECT column_name, data_type, is_nullable
         FROM information_schema.columns 
         WHERE table_name = 'product'
         ORDER BY ordinal_position
       `);
-      
+
       if (columns.rows.length > 0) {
-        console.log('🏗️ Product table columns:', columns.rows);
+        console.log("🏗️ Product table columns:", columns.rows);
       }
-      
     } catch (error) {
-      console.error('❌ Database connection error:', error.message);
+      console.error("❌ Database connection error:", error.message);
     }
   }
 }

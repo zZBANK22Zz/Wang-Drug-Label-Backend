@@ -1,3 +1,6 @@
+// ===================================
+// src/config/kafka.js (Updated with Priority - Fixed)
+// ===================================
 const { Kafka } = require('kafkajs');
 
 const kafka = new Kafka({
@@ -15,12 +18,36 @@ const producer = kafka.producer({
   transactionTimeout: 30000
 });
 
-const consumer = kafka.consumer({
-  groupId: process.env.KAFKA_CONSUMER_GROUP || 'default-group',
-  sessionTimeout: 30000,
-  heartbeatInterval: 3000
-});
+// 🆕 Consumer with Priority Settings (Fixed)
+const createConsumer = () => {
+  const containerRole = process.env.CONTAINER_ROLE || 'main';
+  const consumerGroup = process.env.KAFKA_CONSUMER_GROUP || 'primary-processors';
+  
+  // 🎯 Priority configuration based on container role
+  const consumerConfig = {
+    groupId: consumerGroup,
+    // Secondary backend gets priority
+    sessionTimeout: containerRole === 'secondary' ? 6000 : 30000,     // Shorter timeout for secondary
+    heartbeatInterval: containerRole === 'secondary' ? 1000 : 3000,   // More frequent heartbeat for secondary
+    maxWaitTimeInMs: containerRole === 'secondary' ? 100 : 1000,      // Faster processing for secondary
+    allowAutoTopicCreation: true
+    // ❌ Removed custom partitionAssigners as it was causing the error
+    // We'll use other methods for priority handling
+  };
 
+  console.log(`🔧 Creating ${containerRole} consumer with config:`, {
+    groupId: consumerConfig.groupId,
+    sessionTimeout: consumerConfig.sessionTimeout,
+    heartbeatInterval: consumerConfig.heartbeatInterval,
+    priority: containerRole === 'secondary' ? 'HIGH' : 'LOW'
+  });
+
+  return kafka.consumer(consumerConfig);
+};
+
+const consumer = createConsumer();
+
+// Rest of kafka.js remains the same...
 const connectKafka = async () => {
   try {
     console.log('🔌 Connecting to Kafka...');
@@ -43,7 +70,7 @@ const disconnectKafka = async () => {
   }
 };
 
-// Producer functions
+// Producer functions remain the same...
 const publishMessage = async (topic, message, key = null) => {
   try {
     const messageValue = typeof message === 'string' ? message : JSON.stringify(message);
@@ -74,11 +101,27 @@ const publishMessage = async (topic, message, key = null) => {
   }
 };
 
-// Consumer functions
+// 🆕 Improved subscribe with priority handling
 const subscribeToTopics = async (topics, messageHandler) => {
   try {
+    const containerRole = process.env.CONTAINER_ROLE || 'main';
+    
+    // ✅ Add validation for topics parameter
+    if (!topics || !Array.isArray(topics)) {
+      throw new Error('Topics must be a non-empty array');
+    }
+
     for (const topic of topics) {
-      await consumer.subscribe({ topic: topic.trim(), fromBeginning: false });
+      await consumer.subscribe({ 
+        topic: topic.trim(), 
+        fromBeginning: false 
+      });
+    }
+
+    // 🎯 Add delay for main backend to ensure secondary gets priority
+    if (containerRole === 'main') {
+      console.log('⏳ Main backend waiting 10 seconds to ensure secondary priority...');
+      await new Promise(resolve => setTimeout(resolve, 10000));
     }
 
     await consumer.run({
@@ -100,26 +143,28 @@ const subscribeToTopics = async (topics, messageHandler) => {
             topic,
             key: parsedMessage.key,
             offset: message.offset,
-            container: process.env.CONTAINER_ROLE
+            partition,
+            container: containerRole,
+            priority: containerRole === 'secondary' ? 'PRIMARY' : 'BACKUP'
           });
 
           await messageHandler(parsedMessage);
         } catch (error) {
           console.error('❌ Error processing message:', error);
-          // TODO: Implement dead letter queue logic here if needed
           await handleFailedMessage(topic, message, error);
         }
       }
     });
     
-    console.log('✅ Subscribed to topics:', topics);
+    console.log(`✅ ${containerRole} backend subscribed to topics:`, topics);
+    console.log(`🎯 Consumer priority: ${containerRole === 'secondary' ? 'PRIMARY' : 'BACKUP'}`);
   } catch (error) {
     console.error('❌ Failed to subscribe to topics:', error);
     throw error;
   }
 };
 
-// Dead letter queue handler
+// Dead letter queue handler remains the same...
 const handleFailedMessage = async (topic, message, error) => {
   try {
     console.error('💥 Message processing failed:', {
@@ -130,7 +175,6 @@ const handleFailedMessage = async (topic, message, error) => {
       container: process.env.CONTAINER_ROLE
     });
 
-    // Send to dead letter queue
     await publishMessage('dead-letter-queue', {
       originalTopic: topic,
       originalMessage: {
@@ -148,10 +192,9 @@ const handleFailedMessage = async (topic, message, error) => {
   }
 };
 
-// Health check for Kafka
+// Health check remains the same...
 const checkKafkaHealth = async () => {
   try {
-    // Try to get metadata from Kafka
     const admin = kafka.admin();
     await admin.connect();
     await admin.listTopics();
