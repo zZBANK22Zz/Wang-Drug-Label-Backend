@@ -1,14 +1,19 @@
 const http = require('http');
 
+const port = process.env.PORT || 3000;
+const containerRole = process.env.CONTAINER_ROLE || 'main';
+
 const options = {
-  host: 'localhost',
-  port: process.env.PORT || 3000,
-  path: '/health',
-  timeout: 5000,
-  method: 'GET'
+  hostname: 'localhost',
+  port: port,
+  path: '/health',  // ใช้ /health endpoint ที่มีอยู่แล้วใน server.js
+  method: 'GET',
+  timeout: 5000     // เพิ่ม timeout เป็น 5 วินาที
 };
 
-const request = http.request(options, (res) => {
+console.log(`🏥 Starting health check for ${containerRole} backend on port ${port}...`);
+
+const healthCheck = http.request(options, (res) => {
   let data = '';
   
   res.on('data', (chunk) => {
@@ -16,36 +21,39 @@ const request = http.request(options, (res) => {
   });
   
   res.on('end', () => {
-    try {
-      const healthData = JSON.parse(data);
-      
-      console.log(`Health check status: ${res.statusCode}`);
-      console.log(`Container: ${healthData.container || 'unknown'}`);
-      console.log(`Services: ${JSON.stringify(healthData.services || {})}`);
-      
-      if (res.statusCode === 200 && healthData.success) {
-        console.log('✅ Health check passed');
-        process.exit(0);
-      } else {
-        console.log('❌ Health check failed - unhealthy response');
-        process.exit(1);
+    console.log(`🏥 Health check response (${res.statusCode}):`, data);
+    
+    if (res.statusCode === 200) {
+      try {
+        const response = JSON.parse(data);
+        if (response.success && response.container === containerRole) {
+          console.log(`✅ ${containerRole} backend is healthy`);
+          process.exit(0); // Success
+        } else {
+          console.error(`❌ Health check failed: Invalid response structure`);
+          process.exit(1); // Failure
+        }
+      } catch (parseError) {
+        console.error(`❌ Health check failed: Invalid JSON response`);
+        process.exit(1); // Failure
       }
-    } catch (error) {
-      console.log('❌ Health check failed - invalid JSON response');
-      process.exit(1);
+    } else {
+      console.error(`❌ Health check failed with status: ${res.statusCode}`);
+      process.exit(1); // Failure
     }
   });
 });
 
-request.on('error', (err) => {
-  console.log('❌ Health check failed:', err.message);
-  process.exit(1);
+healthCheck.on('error', (err) => {
+  console.error(`❌ ${containerRole} backend health check failed:`, err.message);
+  process.exit(1); // Failure
 });
 
-request.on('timeout', () => {
-  console.log('❌ Health check timeout');
-  request.destroy();
-  process.exit(1);
+healthCheck.on('timeout', () => {
+  console.error(`⏰ ${containerRole} backend health check timed out`);
+  healthCheck.destroy();
+  process.exit(1); // Failure
 });
 
-request.end();
+healthCheck.setTimeout(5000);
+healthCheck.end();

@@ -1,14 +1,54 @@
 const MemberModel = require("../model/memberModel");
 const jwt = require('jsonwebtoken');
 
+// Auth Service Client สำหรับเชื่อมต่อกับ Auth Service (ใช้เฉพาะ login)
+class AuthServiceClient {
+  constructor(baseUrl = process.env.AUTH_SERVICE_URL || 'http://localhost:3002') {
+    this.baseUrl = baseUrl;
+  }
+
+  async makeRequest(endpoint, options = {}) {
+    try {
+      const response = await fetch(`${this.baseUrl}${endpoint}`, {
+        headers: {
+          'Content-Type': 'application/json',
+          ...options.headers
+        },
+        ...options
+      });
+
+      const data = await response.json();
+      return { 
+        success: response.ok, 
+        data, 
+        status: response.status 
+      };
+    } catch (error) {
+      console.error('Auth service request failed:', error);
+      return { 
+        success: false, 
+        error: error.message 
+      };
+    }
+  }
+
+  // ตรวจสอบ credentials กับ Auth Service (ใช้เฉพาะ login)
+  async verifyCredentials(username, password) {
+    return await this.makeRequest('/verify', {
+      method: 'POST',
+      body: JSON.stringify({ username, password })
+    });
+  }
+}
+
 class MemberController {
-  // เพิ่ม member ใหม่ (Register) - Updated
+  // เพิ่ม member ใหม่ (Register) - ไม่ใช้ Auth Service
   static async addMember(req, res) {
     try {
       const memberData = req.body;
 
-      // Validation - Updated required fields
-      const requiredFields = ["mem_username", "mem_password"];
+      // Validation - เฉพาะ username เท่านั้น (ไม่ต้องการ password)
+      const requiredFields = ["mem_username"];
       const missingFields = requiredFields.filter(
         (field) => !memberData[field]
       );
@@ -21,16 +61,7 @@ class MemberController {
         });
       }
 
-      // Password validation
-      if (memberData.mem_password.length < 6) {
-        return res.status(400).json({
-          success: false,
-          message: 'Password must be at least 6 characters long',
-          data: null,
-        });
-      }
-
-      // ตรวจสอบว่า mem_username ซ้ำหรือไม่
+      // ตรวจสอบว่า mem_username ซ้ำหรือไม่ใน main database
       const usernameExists = await MemberModel.checkUsernameExists(memberData.mem_username);
       if (usernameExists) {
         return res.status(409).json({
@@ -40,7 +71,7 @@ class MemberController {
         });
       }
 
-      // สร้าง member ใหม่
+      // สร้าง member ใน main database (ไม่เก็บ password)
       const newMember = await MemberModel.createMember(memberData);
 
       return res.status(201).json({
@@ -117,7 +148,7 @@ class MemberController {
     }
   }
 
-  // อัพเดทข้อมูล member - Updated
+  // อัพเดทข้อมูล member - ไม่ใช้ Auth Service (ไม่จัดการ password)
   static async updateMember(req, res) {
     try {
       const { id } = req.params;
@@ -140,13 +171,13 @@ class MemberController {
         });
       }
 
-      // ตรวจสอบว่ามี data ให update ไหม
+      // ตรวจสอบว่ามี data ให update ไหม (ไม่รวม password เพราะไม่เก็บใน main DB)
       const allowedFields = [
         "mem_username", "mem_nameSite", "mem_license", "mem_type",
         "mem_province", "mem_address", "mem_amphur", "mem_tumbon",
         "mem_post", "mem_taxid", "mem_office", "mem_daystart", 
         "mem_dayend", "mem_timestart", "mem_timeend", "mem_price", 
-        "mem_comments", "mem_password"
+        "mem_comments", "mem_phonenumber"
       ];
 
       const hasValidFields = Object.keys(updateData).some((field) =>
@@ -184,15 +215,7 @@ class MemberController {
         });
       }
 
-      // Password validation
-      if (updateData.mem_password !== undefined && updateData.mem_password.length < 6) {
-        return res.status(400).json({
-          success: false,
-          message: 'Password must be at least 6 characters long',
-          data: null,
-        });
-      }
-
+      // อัพเดทข้อมูลใน main database (ไม่รวม password)
       const updatedMember = await MemberModel.updateMember(id, updateData);
 
       return res.status(200).json({
@@ -211,7 +234,7 @@ class MemberController {
     }
   }
 
-  // อัพเดทที่อยู่ - Updated
+  // อัพเดทที่อยู่ - เหมือนเดิม
   static async updateAddress(req, res) {
     try {
       const { id } = req.params;
@@ -260,7 +283,7 @@ class MemberController {
     }
   }
 
-  // Delete member
+  // Delete member - ไม่ใช้ Auth Service
   static async deleteMember(req, res) {
     try {
       const { id } = req.params;
@@ -282,6 +305,7 @@ class MemberController {
         });
       }
 
+      // ลบจาก main database เท่านั้น
       const deletedMember = await MemberModel.deleteMember(id);
 
       return res.status(200).json({
@@ -299,7 +323,7 @@ class MemberController {
     }
   }
 
-  // Login member - Updated
+  // Login member - ใช้ Auth Service เฉพาะตรงนี้
   static async loginMember(req, res) {
     try {
       const { username, password, memberCode } = req.body;
@@ -314,15 +338,44 @@ class MemberController {
       }
 
       let member;
-      
-      // เลือกวิธี login ตามข้อมูลที่ส่งมา
+      let loginUsername = username;
+
+      // หาก login ด้วย memberCode ต้องหา username ก่อน
       if (memberCode) {
-        member = await MemberModel.loginMemberByCode(memberCode, password);
+        member = await MemberModel.getMemberByCode(memberCode);
+        if (!member) {
+          return res.status(401).json({
+            success: false,
+            message: "Invalid credentials",
+            data: null,
+          });
+        }
+        loginUsername = member.mem_username;
       } else {
-        member = await MemberModel.loginMember(username, password);
+        // หาก login ด้วย username ให้หา member จาก main database
+        member = await MemberModel.getMemberByUsername(username);
+        if (!member) {
+          return res.status(401).json({
+            success: false,
+            message: "Invalid credentials",
+            data: null,
+          });
+        }
       }
 
-      // สร้าง JWT token ด้วย fields ที่มีอยู่จริงใน table ใหม่
+      // ตรวจสอบ password กับ Auth Service
+      const authClient = new AuthServiceClient();
+      const authResult = await authClient.verifyCredentials(loginUsername, password);
+      
+      if (!authResult.success) {
+        return res.status(401).json({
+          success: false,
+          message: "Invalid credentials",
+          data: null,
+        });
+      }
+
+      // สร้าง JWT token
       const token = jwt.sign(
         { 
           mem_id: member.mem_id, 
@@ -348,7 +401,7 @@ class MemberController {
       console.error("Error in loginMember:", error);
       
       // Handle specific login errors
-      if (error.message === "Member not found" || error.message === "Invalid password") {
+      if (error.message === "Member not found") {
         return res.status(401).json({
           success: false,
           message: "Invalid credentials",
